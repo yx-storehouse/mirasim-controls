@@ -155,7 +155,18 @@ function Get-ReleaseTreeFiles {
 
 function Get-FileSha256 {
     param([string]$Path)
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    # A PS7 parent can pass a module path that hides PS5.1 utility modules.
+    # Hash with the framework directly instead of depending on Get-FileHash.
+    $stream = $null
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        return [System.BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        if ($null -ne $stream) { $stream.Dispose() }
+        $algorithm.Dispose()
+    }
 }
 
 function Test-Release {
@@ -212,7 +223,8 @@ function Expand-ReleaseArchive {
         }
     }
     finally { $zip.Dispose() }
-    Expand-Archive -LiteralPath $Archive -DestinationPath $Destination
+    # Entries were checked above; avoid the cross-edition Archive module too.
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($Archive, $Destination)
 }
 
 function Remove-OwnedStaging {

@@ -94,7 +94,7 @@ exit 0
   }
 
   function args(options = {}) {
-    const result = ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', BOOTSTRAP,
+    const result = ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', options.entryPoint || BOOTSTRAP,
       '-RepositoryUrl', source, '-Branch', 'main', '-CacheRoot', options.cache || cache,
       '-Action', options.action || 'install', '-NonInteractive'];
     if (options.offline) result.push('-Offline');
@@ -159,6 +159,37 @@ test('first launch, unchanged launch and next remote commit execute the correspo
     { version: '4.4.0', action: 'status', nonInteractive: true },
     { version: '4.4.1', action: 'install', nonInteractive: true },
   ]);
+});
+
+test('an inherited module-path mismatch cannot prevent hashing, extraction or a later release update', t => {
+  const f = fixture(t);
+  const restrictedModules = path.join(f.root, 'PS7-like isolated modules');
+  fs.mkdirSync(restrictedModules);
+  const entryPoint = path.join(f.root, 'restricted-module-host.ps1');
+  // Some Windows builds rediscover these functions through the PSHOME module
+  // cache even with a foreign PSModulePath. Remove just the two script-module
+  // functions after loading the base cmdlets to make the CI failure deterministic.
+  fs.writeFileSync(entryPoint, '\ufeff' + `
+[CmdletBinding()]
+param([string]$RepositoryUrl,[string]$Branch,[string]$CacheRoot,[string]$Action,[switch]$NonInteractive,[switch]$Offline)
+$ErrorActionPreference='Stop'
+Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Utility/Microsoft.PowerShell.Utility.psd1') -Force
+Import-Module (Join-Path $PSHOME 'Modules/Microsoft.PowerShell.Management/Microsoft.PowerShell.Management.psd1') -Force
+$PSModuleAutoLoadingPreference='None'
+Remove-Item Function:Get-FileHash -ErrorAction SilentlyContinue
+Remove-Item Function:Expand-Archive -ErrorAction SilentlyContinue
+if(Get-Command Get-FileHash,Expand-Archive -ErrorAction SilentlyContinue){throw 'The CI missing-command condition was not reproduced'}
+& $env:MIRASIM_TEST_BOOTSTRAP @PSBoundParameters
+exit $LASTEXITCODE
+`.trimStart());
+  const options = { entryPoint, env: { PSModulePath: restrictedModules, MIRASIM_TEST_BOOTSTRAP: BOOTSTRAP } };
+  const first = f.publish('4.4.0');
+  succeeded(f.run(options));
+  assert.equal(f.current().commit, first);
+  const second = f.publish('4.4.1');
+  succeeded(f.run(options));
+  assert.equal(f.current().commit, second);
+  assert.deepEqual(f.events().map(event => event.version), ['4.4.0', '4.4.1']);
 });
 
 test('network failure can use a verified previous release but cannot bootstrap an empty cache', t => {
