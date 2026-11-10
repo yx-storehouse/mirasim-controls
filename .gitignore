@@ -1,0 +1,10 @@
+node_modules/
+diagnostics/
+research/
+prepared/
+validation/
+dist/
+*.zip
+*.log
+.cache/
+current.json

@@ -1,0 +1,11 @@
+# Runtime checksums must describe the exact bytes Git distributes.
+runtime/** -text
+bootstrap.ps1 -text
+*.bat -text
+*.cjs text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+
+# Override the generic source rule for the checksummed runtime.
+runtime/** -text

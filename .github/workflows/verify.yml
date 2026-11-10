@@ -1,0 +1,22 @@
+name: Verify launcher and patch runtime
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify release checksums
+        run: node scripts/release-manifest.cjs --check
+      - name: Verify update and patch transactions
+        run: node --test tests/*.test.cjs

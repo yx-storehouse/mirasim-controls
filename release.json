@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "version": "4.4.0",
+  "files": [
+    {
+      "path": "runtime/asar.cjs",
+      "sha256": "daf1a2add161f559366d42e27ce3077384aed95a4eff5ff6f736f53d4c9c7e33"
+    },
+    {
+      "path": "runtime/bundled-manager.cjs",
+      "sha256": "d5e94732e2f0dd957a589eb5798f8f5f472e2d2af57abf58e839ae0aa45d4aa6"
+    },
+    {
+      "path": "runtime/cache-manager.cjs",
+      "sha256": "ac3bade92842f73c36a8776347d6153fee1f4696757b4d8785f829201455187c"
+    },
+    {
+      "path": "runtime/claude-controls-backend.cjs",
+      "sha256": "d8dbf0e43bd00636a5512d1d9bd72b9fbce2889cb4ea58e0d082795763c35af7"
+    },
+    {
+      "path": "runtime/claude-controls-frontend.cjs",
+      "sha256": "5459ecf2f893943f2b51238ac7607302a2d0e33fa19e3fa8b6ea870529bc7fdc"
+    },
+    {
+      "path": "runtime/claude-fast-toggle.template.js",
+      "sha256": "8b5a3f12b0814d83840ebcb6f91a3b14aeabe1bb0b1d422ba0c7eda12e0211ab"
+    },
+    {
+      "path": "runtime/combined-patch.cjs",
+      "sha256": "831b6114c17adc104333190c8a853d8d0ea26e408893824912602806c0bc976c"
+    },
+    {
+      "path": "runtime/compat.cjs",
+      "sha256": "45050fe95d0fff5b30dcdf1b32be36d3077755950da8912dc3369b1769a75d70"
+    },
+    {
+      "path": "runtime/diagnostic-error.cjs",
+      "sha256": "9bd912ff064c4cb774a9326b0a1634aa11e90b24ba49adff0c192ffbff220573"
+    },
+    {
+      "path": "runtime/frontend-assets.cjs",
+      "sha256": "15ae4fedaf4fb506d9fccf4c540b646d2f3cbef7886e64091b10b3ae5d8fb49f"
+    },
+    {
+      "path": "runtime/main.cjs",
+      "sha256": "d540ddaf860802ffee3dd6cd7d38ba2f4c064a25cd8fa5821462ae15e2cd2300"
+    },
+    {
+      "path": "runtime/manager.cjs",
+      "sha256": "99392125007f90d29b4d623136676d073838a36e561c64115b624cd96930e470"
+    },
+    {
+      "path": "runtime/run.ps1",
+      "sha256": "40b5e54ac15927a9d70a69d485314a80a936396d04c719447b6771fba41fcf39"
+    },
+    {
+      "path": "runtime/speed-picker.template.js",
+      "sha256": "4559323732911ea326926d7bed9425469ff5106209cf777f28589eeb4688562b"
+    },
+    {
+      "path": "runtime/ultracode-backend.cjs",
+      "sha256": "afe746ab878fb1ac0ca474840cf642f60f7fa9c844de2b8dbdd11bb722d4f934"
+    },
+    {
+      "path": "runtime/ultracode-frontend.cjs",
+      "sha256": "a4f110c3567ae8f604a0d4d33f159ba9af35b175c78c34f2c57161f3ae47c719"
+    },
+    {
+      "path": "runtime/ultracode-toggle.template.js",
+      "sha256": "ab221f50832478442510ce6b64ad7bebdd68c57459ecc2d63e6fdac5935c6bd3"
+    }
+  ]
+}
