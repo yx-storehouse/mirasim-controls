@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "4.4.0",
+  "version": "4.5.0",
   "files": [
     {
       "path": "runtime/asar.cjs",
@@ -8,11 +8,11 @@
     },
     {
       "path": "runtime/bundled-manager.cjs",
-      "sha256": "d5e94732e2f0dd957a589eb5798f8f5f472e2d2af57abf58e839ae0aa45d4aa6"
+      "sha256": "21cb2a971fa148a0c6a8e648c5d81053cbe1d9d5a177b7500ec80de8f53ca094"
     },
     {
       "path": "runtime/cache-manager.cjs",
-      "sha256": "ac3bade92842f73c36a8776347d6153fee1f4696757b4d8785f829201455187c"
+      "sha256": "fda24dc6418a337e2a65017ae7cd939f3ed6c4d3221ab0e0b2242313711f8969"
     },
     {
       "path": "runtime/claude-controls-backend.cjs",
@@ -40,7 +40,7 @@
     },
     {
       "path": "runtime/frontend-assets.cjs",
-      "sha256": "15ae4fedaf4fb506d9fccf4c540b646d2f3cbef7886e64091b10b3ae5d8fb49f"
+      "sha256": "ec9131c4a56b024964ed8a637a634902f2235fd443a14b1e996dee3a4696e608"
     },
     {
       "path": "runtime/main.cjs",
@@ -48,7 +48,7 @@
     },
     {
       "path": "runtime/manager.cjs",
-      "sha256": "99392125007f90d29b4d623136676d073838a36e561c64115b624cd96930e470"
+      "sha256": "6fc2a9bce6f4fde51fd242531b724812bcff004faf9921a90a4c53993352b97a"
     },
     {
       "path": "runtime/run.ps1",
@@ -60,7 +60,7 @@
     },
     {
       "path": "runtime/ultracode-backend.cjs",
-      "sha256": "afe746ab878fb1ac0ca474840cf642f60f7fa9c844de2b8dbdd11bb722d4f934"
+      "sha256": "14fca183b6f3e171bbc8196df41c18188ea764a20758d83003471ba1f29fb685"
     },
     {
       "path": "runtime/ultracode-frontend.cjs",

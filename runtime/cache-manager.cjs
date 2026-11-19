@@ -6,7 +6,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
-const KIT_VERSION = '4.4.0';
+const KIT_VERSION = '4.5.0';
 const FEATURES = ['codex-speed', 'claude-ultracode', 'claude-fast'];
 const PATCH_MARKER = 'mirasim-speed-picker:';
 const VERSION = /^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/;

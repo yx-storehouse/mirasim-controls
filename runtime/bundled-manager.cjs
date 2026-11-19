@@ -6,7 +6,7 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { parseAsar, replaceAsar } = require('./asar.cjs');
-const KIT_VERSION = '4.4.0';
+const KIT_VERSION = '4.5.0';
 const FEATURES = ['codex-speed', 'claude-ultracode', 'claude-fast'];
 const sha = data => crypto.createHash('sha256').update(data).digest('hex');
 const asJson = value => Buffer.from(JSON.stringify(value, null, 2) + '\n');

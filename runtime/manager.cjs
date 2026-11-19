@@ -4,7 +4,7 @@ const path = require('node:path');
 const os = require('node:os');
 const cacheModule = require('./cache-manager.cjs');
 const { createBundledManager } = require('./bundled-manager.cjs');
-const KIT_VERSION = '4.4.0';
+const KIT_VERSION = '4.5.0';
 const FEATURES = ['codex-speed', 'claude-ultracode', 'claude-fast'];
 
 function compareVersion(a, b) {

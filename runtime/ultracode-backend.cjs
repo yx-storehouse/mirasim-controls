@@ -4,7 +4,9 @@ const { extractFunction, structuralFingerprint } = require('./compat.cjs');
 const MARKER = 'mirasim-ultracode:backend-v1';
 const ID = '[$A-Z_a-z][$\\w]*';
 const TRUSTED = {
-  setter: ['a19b6ec7909b86d5f5033c99fd1de373c51d785267a901fd69dc423cbf0c63cd'],
+  setter: ['a19b6ec7909b86d5f5033c99fd1de373c51d785267a901fd69dc423cbf0c63cd',
+    // 0.0.824 derives Qwen's valid effort rungs from its selected model.
+    'a16305ccf3f20c2b13f1ebd68ab8b3bd2cc571dab3c58579dee49d3903b5e51a'],
   defaults: ['b2e434e59e439fd87e9d8c20e71473ce1736892e71d5d4f021e8ea8e0f623ed8'],
   catalog: [
     '8a3fa6e0a68f47123303ddcec42528470c3ae77b2e7a3011e585b404f7a377b0',
@@ -15,6 +17,9 @@ const TRUSTED = {
     // enabling its native thinking-display preference. Removing that branch
     // from 0.0.785 yields this exact hash; keep the native omission intact.
     '29112e6b013b3f9fb1d10910a1cc1fa14fe4e29f4a86b62ccf56c037ac5012d5',
+    // 0.0.824 filters quota metadata to routed models, exposes native model
+    // groups, and falls back to an available effort marked as the default.
+    'cbebcae1a6110cc1c60a5608a253fb107915a4dd6724ad73cfbcebbe05baa621',
   ],
   plugin: ['4e821bcbc2acaaba4188a75210005ccebd700bf4d8586f9c121e1e11211bf227'],
   fingerprint: [
@@ -24,12 +29,20 @@ const TRUSTED = {
     // effort, extraArgs and sorted env remain unchanged. Keep it verbatim so
     // wrapped and unwrapped native runners cannot share a pooled process.
     '39b00d0525b0b079e45425abfceee4459d35ac985abfcf9bd997f2e9945bc53e',
+    // 0.0.824 normalizes explicitly declared launch-volatile values for
+    // reuse identity only. Actual spawn arguments/environment stay unchanged.
+    '137d6e21a93b09ca4fa1af9fce96908f892615d2d18c9471bd4bcef33637b150',
   ],
-  normalizer: ['a98958739e3a04b3055ed8411cc0e08098c54f32622352522744509f4d065280'],
+  normalizer: ['a98958739e3a04b3055ed8411cc0e08098c54f32622352522744509f4d065280',
+    '6e3967002b7ef55530903573dca5322470a48facfbcc84cc09ece860ad6eb4e6'],
+  volatileNormalizer: ['bd89644756587ed3f14e6e514452144d52ba367c8d6a90cd9384dd9709964ebe'],
+  mcpIdentityHasher: ['c6e2cc015480e1515ad4a596721422e74414139002bdd19843bf3bc9cfd2fce3'],
   // 0.0.771 adds actor/envKeys/path provenance to the return value. Its
   // environment and argument merge remain immutable, ordered, and unchanged.
   merge: ['b109e8c1023f6b376a3de8b0edb98902dc7483b0575ae9db5af4eca5cfe579c8',
-    '9a1a677a0808c42ba20df2a7d6bdab4e4552fd92cddc5bdba6f984040cb8ef5d'],
+    '9a1a677a0808c42ba20df2a7d6bdab4e4552fd92cddc5bdba6f984040cb8ef5d',
+    // 0.0.824 adds ordered, deduplicated volatile-value propagation.
+    '900312d990494f6a5ff3712c9f77546e350e2b1625af9f2b78adbe915cde70de'],
 };
 const RESPONSIBILITIES = {
   setter: 'Agent defaults validation and persistence',
@@ -39,6 +52,8 @@ const RESPONSIBILITIES = {
   fingerprint: 'Claude runner reuse identity',
   normalizer: 'Runner identity argument normalization',
   merge: 'Per-turn spawn arguments and environment merge',
+  volatileNormalizer: 'Declared volatile launch-value identity normalization',
+  mcpIdentityHasher: 'MCP content identity normalization and hashing',
 };
 
 function fail(code, message, details = {}) {
@@ -87,15 +102,35 @@ function detectUltracodeBackend(source) {
   only(router[0], new RegExp(escape(routerAnchor), 'g'), 'Settings service tier forwarding');
   const pluginHead = only(source, regex(String.raw`function (?<name>@ID)\((?<enabled>@ID)\)\{return\{"id":"mirasim-claude-workflow","contributeSpawn":async\(\{agent:(?<agent>@ID),mode:(?<mode>@ID),effort:(?<effort>@ID)\}\)=>\k<agent>!=="claude"\|\|\k<mode>!=="run"\?null:await \k<enabled>\(\k<effort>\?\?null\)\?\{"env":\{"CLAUDE_WORKFLOW":"1"\}\}:null\}\}`), 'Claude Workflow spawn plugin');
   const plugin = { ...pluginHead.groups, body: pluginHead[0] };
-  const fingerprintHead = only(source, regex(String.raw`function (?<name>@ID)\((?<executable>@ID),(?<input>@ID)\)\{let @ID=\k<input>\["runAs"\]&&\k<input>\["runAs"\]\["refuse"\]===void 0\?\k<input>\["runAs"\]:null;return JSON\["stringify"\]\(`), 'Claude runner fingerprint');
+  const fingerprintHead = only(source, regex(String.raw`function (?<name>@ID)\((?<executable>@ID),(?<input>@ID)\)\{let @ID=\k<input>\["runAs"\]&&\k<input>\["runAs"\]\["refuse"\]===void 0\?\k<input>\["runAs"\]:null(?:,(?<volatileValue>@ID)=(?<volatileFactory>@ID)\(\k<input>\["launchVolatile"\]\))?;return JSON\["stringify"\]\(`), 'Claude runner fingerprint');
   const fingerprint = { ...fingerprintHead.groups };
   fingerprint.body = extractFunction(source, fingerprint.name);
-  const normalized = only(fingerprint.body, regex(String.raw`(?<name>@ID)\(${escape(fingerprint.input)}\["extraArgs"\]\),Object\["entries"\]\(${escape(fingerprint.input)}\["env"\]\?\?\{\}\)\["sort"\]`), 'Runner arguments and environment identity');
+  const volatileArgument = fingerprint.volatileValue ? ',' + escape(fingerprint.volatileValue) : '';
+  const normalized = only(fingerprint.body, regex(String.raw`(?<name>@ID)\(${escape(fingerprint.input)}\["extraArgs"\]${volatileArgument}\),Object\["entries"\]\(${escape(fingerprint.input)}\["env"\]\?\?\{\}\)`), 'Runner arguments and environment identity');
   const normalizer = { name: normalized.groups.name, body: extractFunction(source, normalized.groups.name) };
+  let identityNormalization = null;
+  const identityDependencies = {};
+  if (fingerprint.volatileFactory) {
+    const factory = { name: fingerprint.volatileFactory, body: extractFunction(source, fingerprint.volatileFactory) };
+    const minimum = only(factory.body, regex(String.raw`\["length"\]>=(?<name>@ID)`), 'Volatile-value minimum length');
+    const replacement = only(factory.body, regex(String.raw`\["join"\]\((?<name>@ID)\)`), 'Volatile-value identity marker');
+    // The factory fingerprint deliberately normalizes identifiers, so also
+    // verify its external constants instead of trusting renamed bindings.
+    const minimumValue = only(source, new RegExp(`(?:^|[^$\\w])${escape(minimum.groups.name)}=(\\d+)(?=[,;])`, 'g'), 'Volatile minimum constant');
+    const markerValue = only(source, new RegExp(`(?:^|[^$\\w])${escape(replacement.groups.name)}=("(?:[^"\\\\]|\\\\.)*")(?=[,;])`, 'g'), 'Volatile marker constant');
+    if (Number(minimumValue[1]) !== 16 || JSON.parse(markerValue[1]) !== '<boot-secret>') {
+      fail('ultracode-unverified-structure', 'Declared volatile identity constants changed; manual adaptation is required', { family: 'volatileNormalizer', function: factory.name });
+    }
+    const hasherCall = only(fingerprint.body, regex(String.raw`(?<name>@ID)\(${escape(fingerprint.input)}\["mcpConfigPath"\],${escape(fingerprint.volatileValue)}\)`), 'Volatile MCP identity hashing');
+    const hasher = { name: hasherCall.groups.name, body: extractFunction(source, hasherCall.groups.name) };
+    identityNormalization = { factory, hasher, minimumName: minimum.groups.name, replacementName: replacement.groups.name, minimumLength: 16, marker: '<boot-secret>' };
+    identityDependencies.volatileNormalizer = factory;
+    identityDependencies.mcpIdentityHasher = hasher;
+  }
   const mergeCall = only(source, regex(String.raw`(?<name>@ID)\(\[\{"env":(?<profile>@ID)\?\.\["env"\],"extraArgs":\k<profile>\?\.\["extraArgs"\],"configOverrides":\k<profile>\?\.\["configOverrides"\]\},\{"env":@ID\["env"\]\},\.\.\.@ID\]\)`), 'Fresh per-turn spawn merge');
   const merge = { name: mergeCall.groups.name, body: extractFunction(source, mergeCall.groups.name) };
   const evidence = [];
-  for (const [family, item] of Object.entries({ setter, defaults, catalog, plugin, fingerprint, normalizer, merge })) {
+  for (const [family, item] of Object.entries({ setter, defaults, catalog, plugin, fingerprint, normalizer, merge, ...identityDependencies })) {
     const hash = structuralFingerprint(item.body);
     evidence.push({ family, function: item.name, fingerprint: hash });
     if (!TRUSTED[family]?.includes(hash)) {
@@ -106,7 +141,7 @@ function detectUltracodeBackend(source) {
       });
     }
   }
-  return { compatible: true, evidence, metadata: { setter, config: config.groups, configAnchor: config[0], defaults, defaultsAnchor: defaultsAccess[0], catalog, catalogAnchor: catalogAccess[0], routerBody: router[0], routerAnchor, routerFrame: router.groups.frame, plugin, fingerprint, normalizer, merge } };
+  return { compatible: true, evidence, metadata: { setter, config: config.groups, configAnchor: config[0], defaults, defaultsAnchor: defaultsAccess[0], catalog, catalogAnchor: catalogAccess[0], routerBody: router[0], routerAnchor, routerFrame: router.groups.frame, plugin, fingerprint, normalizer, merge, identityNormalization } };
 }
 
 function patchUltracodeBackend(source) {

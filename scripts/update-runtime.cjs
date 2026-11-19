@@ -27,7 +27,7 @@ const RUNTIME_FILES = Object.freeze([
 ]);
 
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
-const DEFAULT_SOURCE = path.resolve(REPOSITORY_ROOT, '..', 'mirasim-speed-picker', 'controls-v44');
+const DEFAULT_SOURCE = path.resolve(REPOSITORY_ROOT, '..', 'mirasim-speed-picker', 'controls-v45-824');
 const DIAGNOSTIC_ANCHOR = "const file = path.join(manager.kitDir, 'diagnostics', name);";
 const DIAGNOSTIC_OVERLAY = "const diagnosticsDir = process.env.MIRASIM_CONTROLS_DIAGNOSTICS || path.join(manager.kitDir, 'diagnostics');\n    const file = path.join(diagnosticsDir, name);";
 

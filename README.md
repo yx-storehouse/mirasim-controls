@@ -52,7 +52,9 @@
 - **Claude Fast**：明确开启或关闭 Fast；未显式选择前保持原生设置继承。
 - **Claude Ultracode**：独立启用原生 Ultracode 编排行为，同时保留所选推理强度；关闭开关不强制抹除其他原生来源的模式设置。
 
-当前补丁引擎为 **4.4.0**，已验证兼容 Mirasim `0.0.750、0.0.761、0.0.771、0.0.774、0.0.785、0.0.787、0.0.792`。其中 787 的原生模型目录变化、可选错误过滤和紧凑布局新参数均被保留；[0.0.792 安装包验证](docs/compatibility-0.0.792.md)确认现有脚本无需修改。脚本自动更新不代表自动猜测任意新版结构；没有已验证适配的新 Mirasim 版本，仍会导出兼容报告并停止写入。
+补丁引擎 **4.5.0** 支持 Mirasim **0.0.824 / ABI 227** 和 **0.0.827 / ABI 231**。它适配新版Claude进程复用身份、模型目录和前端配置同步逻辑；827可直接沿用同一引擎，无须在824适配基础上再修改运行代码。详见 [0.0.824适配说明](docs/compatibility-0.0.824.md) 和 [0.0.827安装包验证](docs/compatibility-0.0.827.md)。固定 BAT 和更新方式保持不变。
+
+旧版 `0.0.750、0.0.761、0.0.771、0.0.774、0.0.785、0.0.787、0.0.792` 的后端和前端候选输出已回归确认，与4.4.0逐字节一致，相关历史结论见 [0.0.792安装包验证](docs/compatibility-0.0.792.md)。脚本自动更新不代表自动猜测任意新版结构；没有已验证适配的新Mirasim版本，仍会导出兼容报告并停止写入。
 
 设置影响后续请求；补丁不会改写原生 Claude `settings.json` 或 Codex `config.toml`。上游是否提供实际加速取决于模型、账号及端点。
 
@@ -72,7 +74,7 @@ node scripts/update-runtime.cjs "C:\path\to\adapted-controls"
 node scripts/release-manifest.cjs
 node scripts/release-manifest.cjs --check
 node --test tests/*.test.cjs
-git add runtime release.json scripts tests README.md bootstrap.ps1 .github .gitattributes .gitignore
+git add runtime release.json scripts tests docs README.md bootstrap.ps1 .github .gitattributes .gitignore
 git commit -m "Adapt controls to the new Mirasim version"
 git push origin main
 ```

@@ -12,15 +12,23 @@ const TRUSTED = {
     // 787 forwards an optional credit value to the native route badge.
     '438a769e3a73c362221abc0462c2c9d49c644eaacf00eafe1a8a5d8eca371214',
   ],
-  select: '56dcded26668cd0f3c848dd939c4eb4fac036435781fa340b42037976c27ff57',
+  select: [
+    '56dcded26668cd0f3c848dd939c4eb4fac036435781fa340b42037976c27ff57',
+    // 824 waits until menu geometry exists before scrolling the active row.
+    '6f05ab0aa4590f951dbbaed6568b17d9bd0b97c12357da2ecfa201abe792473d',
+  ],
   request: [
     '66d0ec3ae961168f24ef7d347baeb33c80007301593b096cbb099b23d72e4383',
     // 787 adds an optional error-frame predicate; the omitted-option contract is unchanged.
     '773bb323b6c1ffffd243a437544c6bc0996156c779fdc6b8795c88c9db23b186',
+    // 824 additionally preserves the server's structured refusal on errors.
+    '155fea55e37144c5f1afeca2ac66143346647a48df84dc93c69c7daed80db095',
   ],
   context: 'be1f7604ab036f01d4cf8c51e96901b28e7fa3764911ec8b87525fe0a5e2cfe4',
   provider: 'cf19e05db6c47c2a1d4b2f889a5294f24262cfc80df1c97311bf0046e54ae5a5',
   effort: '7c278610ed316db60d4b7f8138b814c020e481f0c591beb3a5fc507621b59036',
+  catalogEquality: 'f75e1a9fdfcf11edd50a23f44f40d62c93efd53db6a72d8123f81109480c7d6e',
+  deduplicatedCatalog: 'b277c157ff5c76544ac518a5761a54c826789f754d4e8552e2827d77d7fd873d',
 };
 const MARKERS = ['mirasim-speed-picker:', 'mirasim-unified-controls:', 'mirasim-claude-controls:', 'mirasim-ultracode-toggle:', 'mirasim-claude-fast-toggle:'];
 function fail(code, message, details) { throw new compat.CompatibilityError(code, message, details); }
@@ -109,11 +117,15 @@ function normalizeAssets(assets) {
 
 function detectFrontendAssets(assets) {
   normalizeAssets(assets);
+  // A patched deduplicated catalog no longer starts with `models`; reject its
+  // marker before locating native owners instead of misreporting it missing.
+  if ([...assets.values()].some(source => MARKERS.some(marker => source.includes(marker)))) {
+    fail('already-patched', 'Prepare controls from the verified original assets');
+  }
   const inputCandidates = [...assets].filter(([,source]) => source.includes('data-route-pick') && source.includes('hub.selectEffort'));
-  const catalogCandidates = [...assets].filter(([,source]) => /case"catalog":[$\w]+\.setState\(/.test(source));
+  const catalogCandidates = [...assets].filter(([,source]) => /case"catalog":(?:[$\w]+\.setState\(|\{const [$\w]+=\{models:)/.test(source));
   if (inputCandidates.length !== 1 || catalogCandidates.length !== 1) fail('split-assets-ambiguous', 'Expected one input module and one catalog owner', { inputs: inputCandidates.map(x => x[0]), catalogs: catalogCandidates.map(x => x[0]) });
   const [inputPath, input] = inputCandidates[0], [catalogPath, owner] = catalogCandidates[0];
-  for (const source of [input, owner]) if (MARKERS.some(marker => source.includes(marker))) fail('already-patched', 'Prepare controls from the verified original assets');
   if (inputPath === catalogPath) {
     const detected = compat.detectFrontend(input);
     return { compatible: true, paths: [inputPath], mode: 'single', metadata: { ...detected.metadata, inputPath, catalogPath }, evidence: detected.evidence };
@@ -124,7 +136,16 @@ function detectFrontendAssets(assets) {
   trusted(owner, context.groups.hook, 'context', catalogPath, evidence);
   const provider = only(owner, regex(String.raw`function (?<provider>@ID)\(\{value:(?<value>@ID),children:(?<children>@ID)\}\)\{return ${escape(shared.jsx)}\.jsx\(${escape(context.groups.context)}\.Provider,\{value:\k<value>,children:\k<children>\}\)\}`), 'Shared Workbench provider');
   trusted(owner, provider.groups.provider, 'provider', catalogPath, evidence);
-  const catalog = only(owner, regex(String.raw`case"catalog":(?<store>@ID)\.setState\((?<state>@ID)=>\(\{catalogs:\{\.\.\.\k<state>\.catalogs,\[(?<frame>@ID)\.agent\]:\{models:\k<frame>\.models,`), 'Shared catalog reducer');
+  const legacyCatalog = [...owner.matchAll(regex(String.raw`case"catalog":(?<store>@ID)\.setState\((?<state>@ID)=>\(\{catalogs:\{\.\.\.\k<state>\.catalogs,\[(?<frame>@ID)\.agent\]:\{models:\k<frame>\.models,`))];
+  const deduplicatedCatalog = [...owner.matchAll(regex(String.raw`case"catalog":\{const (?<catalog>@ID)=\{models:(?<frame>@ID)\.models,[^{};]+\};(?<store>@ID)\.setState\((?<state>@ID)=>(?<equal>@ID)\(\k<state>\.catalogs\[\k<frame>\.agent\],\k<catalog>\)\?\k<state>:\{catalogs:\{\.\.\.\k<state>\.catalogs,\[\k<frame>\.agent\]:\k<catalog>\}\}\);break\}`))];
+  if (legacyCatalog.length + deduplicatedCatalog.length !== 1) fail('split-structure-mismatch', 'Expected exactly one shared catalog reducer');
+  const catalog = legacyCatalog[0] || deduplicatedCatalog[0];
+  if (deduplicatedCatalog.length) {
+    const fingerprint = compat.structuralFingerprint(catalog[0]);
+    if (fingerprint !== TRUSTED.deduplicatedCatalog) fail('split-unverified-structure', 'Deduplicated catalog reducer changed; manual adaptation is required', { ownerPath: catalogPath, fingerprint });
+    evidence.push({ family: 'deduplicatedCatalog', ownerPath: catalogPath, fingerprint });
+    trusted(owner, catalog.groups.equal, 'catalogEquality', catalogPath, evidence);
+  }
   const request = only(owner, regex(String.raw`function (?<request>@ID)\((?<client>@ID),(?<frame>@ID),(?<expected>@ID),(?<options>@ID)=\{\}\)\{const\{match:@ID,rejectOnError:@ID=!0,(?:matchError:@ID,)?timeoutMs:@ID=15e3\}=\k<options>;return new Promise\(`), 'Shared acknowledged request');
   trusted(owner, request.groups.request, 'request', catalogPath, evidence);
   const select = only(owner, regex(String.raw`function (?<select>@ID)\(\{value:@ID,options:@ID,onChange:@ID,className:@ID,placeholder:@ID="—",disabled:@ID=!1,readOnly:@ID=!1,size:@ID="md",leading:@ID,mono:@ID=!1,variant:@ID="input",collapseWhenSingle:@ID=!0,align:@ID="start",valueContent:@ID,ariaLabel:@ID,menuMinWidth:@ID\}\)`), 'Shared Select');
@@ -152,6 +173,9 @@ function detectFrontendAssets(assets) {
   if (/serviceTier|service_tier|speedTier|fastMode|ultracodeEnabled|data-mirasim-/.test(routeBody + input.slice(argsEnd, end))) fail('native-speed-control', 'The split input composer already handles speed controls');
   const metadata = {
     inputPath, catalogPath, symbols, routeFunction: route.groups.route,
+    catalogMode: deduplicatedCatalog.length ? 'deduplicated' : 'legacy',
+    catalogEqualityFunction: catalog.groups.equal || null,
+    catalogFrame: catalog.groups.frame, catalogStore: catalog.groups.store,
     contextProvider, contextProviderImported: contextProvider, contextVariable: null,
     contextOwner: { path: catalogPath, context: context.groups.context, provider: provider.groups.provider },
     routeAnchor: compact[0],
