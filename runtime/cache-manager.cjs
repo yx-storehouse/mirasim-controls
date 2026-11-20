@@ -6,8 +6,8 @@ const os = require('node:os');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 
-const KIT_VERSION = '4.5.0';
-const FEATURES = ['codex-speed', 'claude-ultracode', 'claude-fast'];
+const KIT_VERSION = '4.5.1';
+const FEATURES = ['codex-speed', 'claude-ultracode', 'claude-fast', 'claude-native-api-key-auth'];
 const PATCH_MARKER = 'mirasim-speed-picker:';
 const VERSION = /^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/;
 const sha = data => crypto.createHash('sha256').update(data).digest('hex');

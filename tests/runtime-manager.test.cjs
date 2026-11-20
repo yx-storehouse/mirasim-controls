@@ -12,7 +12,7 @@ const { parseAsar } = require('../runtime/asar.cjs');
 const { KIT_VERSION } = require('../runtime/cache-manager.cjs');
 
 const VERSION = '0.0.774';
-const FEATURES = ['codex-speed', 'claude-ultracode', 'claude-fast'];
+const FEATURES = ['codex-speed', 'claude-ultracode', 'claude-fast', 'claude-native-api-key-auth'];
 const INPUT = 'renderer/assets/input.js';
 const CATALOG = 'renderer/assets/state-catalog.js';
 const UNRELATED = 'renderer/assets/unrelated.js';
@@ -464,6 +464,32 @@ function bundledFixture(t) {
     return { directory, file, data: JSON.parse(fs.readFileSync(file, 'utf8')) };
   }
   return { ...f, resources, original, entries, archive, manager, receipt, snapshot: () => snapshot(resources) };
+}
+
+for (const kind of ['cache', 'bundled']) {
+  test(`${kind}: upgrades a three-control 4.5.0 receipt to the native API auth repair`, t => {
+    const f = kind === 'cache' ? cacheFixture(t) : bundledFixture(t);
+    const before = f.snapshot();
+    const install = () => kind === 'cache' ? f.manager.install(VERSION) : f.manager.install();
+    const inspect = () => kind === 'cache' ? f.manager.inspect(VERSION) : f.manager.inspect();
+    const restore = () => kind === 'cache' ? f.manager.restore(VERSION) : f.manager.restore();
+    const receipt = () => kind === 'cache' ? f.receipts()[0] : f.receipt();
+    install();
+    const prior = receipt();
+    prior.data.kitVersion = '4.5.0';
+    prior.data.features = ['codex-speed', 'claude-ultracode', 'claude-fast'];
+    write(prior.file, json(prior.data));
+    assert.equal(inspect().state, 'upgradeable');
+    f.control.patchInputs.length = 0;
+    assert.equal(install().state, 'installed');
+    assert.ok(f.control.patchInputs.some(([name]) => name === 'server-main.cjs'));
+    assert.ok(f.control.patchInputs.every(([, source]) => !source.includes(MARKER)), 'rebuild from verified originals');
+    assert.equal(receipt().data.kitVersion, KIT_VERSION);
+    assert.deepEqual(receipt().data.features, FEATURES);
+    assert.equal(install().state, 'already-installed');
+    restore();
+    assert.deepEqual(f.snapshot(), before);
+  });
 }
 
 test('bundled: updates both split assets and both integrity layers; restores the exact original ASAR', t => {
