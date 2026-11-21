@@ -23,12 +23,16 @@ const FAST_RESPONSIBILITIES = {
 };
 
 // These are source fingerprints, not values learned from the installation being
-// patched. 750--792 share the first BYOK adapter; 824/827 add inline-tool defaults.
+// patched. 750--792 share the first BYOK adapter; 824--828 add inline-tool defaults.
+// 830 additionally supplies the native nonessential-traffic default. Its binding
+// and literal value are checked separately below; this patch preserves that flag.
 // The sealed credential, raw proxy and header-replacement contracts are identical
 // across those reviewed builds. Never change generic OAuth or proxy auth globally.
+const NATIVE_TRAFFIC_BYOK = 'f917061470703c1c16d0a945ed82dc41211c44b5cadeefee42f44325851d97e9';
+const NATIVE_TRAFFIC_DEFAULTS = '0a2caaa8e7bf96ca46842b1a5e541bbaf252694ba544f207ceb34d73f8fd2a8d';
 const TRUSTED_NATIVE_AUTH = {
   byok: ['6709d34d2239b74ad4f3796d224d8325d4e89225508d61de3976b19a4ce53f90',
-    '5ce097d912732d97dba70796d09bca525420b4e8d3f35e9be775c5df686e70d3'],
+    '5ce097d912732d97dba70796d09bca525420b4e8d3f35e9be775c5df686e70d3', NATIVE_TRAFFIC_BYOK],
   credentials: ['269811bd1ccfc6ed7d9187ac62b94555f93d71b51247be6aac3b5726773176f0'],
   auth: ['1ae60d8f22d8204108bb80cf76c74481ea93b2c348507b30f487dafbae176d6e'],
   sealed: ['9606fa937f692bb3f509df37f58963b5118436943234a73fa4d98bf686f1899f'],
@@ -91,6 +95,18 @@ function detectClaudeNativeApiAuth(source) {
       family: `native-auth-${family}`, responsibility: 'Native Claude BYOK authentication and sealed proxy contract',
       function: entry.name, expectedFingerprints: expected, actualFingerprint: fingerprint, fingerprint,
     });
+  }
+  if (structuralFingerprint(byok.normalized) === NATIVE_TRAFFIC_BYOK) {
+    const defaultsName = only(byok.body, regex(String.raw`Object\["assign"\]\(${escape(native.groups.env)},@ID\(${escape(byok.profile)}\["modelId"\]\),@ID,@ID,(?<defaults>@ID)\)`), 'Native Claude traffic-default binding').groups.defaults;
+    const defaults = { name: defaultsName, body: only(source,
+      new RegExp(`(?<![$\\w])${escape(defaultsName)}=\\{[^{}]*\\}`, 'g'), 'Native Claude traffic-default constant')[0] };
+    const fingerprint = structuralFingerprint(defaults.body);
+    if (fingerprint !== NATIVE_TRAFFIC_DEFAULTS) fail('claude-controls-unverified-structure', 'Native Claude traffic defaults changed; manual adaptation is required', {
+      family: 'native-auth-trafficDefaults', responsibility: 'Native Claude nonessential-traffic default',
+      function: defaultsName, expectedFingerprints: [NATIVE_TRAFFIC_DEFAULTS], actualFingerprint: fingerprint, fingerprint,
+    });
+    metadata.trafficDefaults = defaults;
+    evidence.push({ family: 'native-auth-trafficDefaults', function: defaultsName, fingerprint });
   }
   return { compatible: true, metadata, evidence };
 }

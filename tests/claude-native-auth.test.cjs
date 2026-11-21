@@ -9,6 +9,12 @@ const { NATIVE_AUTH_MARKER, detectClaudeNativeApiAuth, patchClaudeNativeApiAuth 
 const plain = value => JSON.parse(JSON.stringify(value));
 const original = detectClaudeNativeApiAuth(fixture).metadata;
 const patched = patchClaudeNativeApiAuth(fixture);
+// 830's reviewed adapter adds this same native default in both the bridge and
+// external-native branches. Keep the original fixture for legacy regression.
+const fixture830 = fixture.replace('...yes,...Aes', '...yes,...Aes,...nativeTrafficDefaults')
+  .replace(',yes,Aes)', ',yes,Aes,nativeTrafficDefaults)')
+  + '\nnativeTrafficDefaults={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":"1"};';
+const patched830 = patchClaudeNativeApiAuth(fixture830);
 
 function runtime(source) {
   const context = {
@@ -47,7 +53,7 @@ async function run(source, input) {
   return plain(await context[original.byok.name](input.provider, input.profile, input.credential, input.options));
 }
 
-test('827/824 and the reviewed legacy BYOK shapes are accepted', () => {
+test('830, 828/827/824 and the reviewed legacy BYOK shapes are accepted', () => {
   assert.equal(patched.evidence.length, 10);
   assert.equal(patched.evidence.find(item => item.family === 'native-auth-byok').fingerprint,
     '5ce097d912732d97dba70796d09bca525420b4e8d3f35e9be775c5df686e70d3');
@@ -56,6 +62,26 @@ test('827/824 and the reviewed legacy BYOK shapes are accepted', () => {
   assert.equal(detectClaudeNativeApiAuth(legacy).evidence.find(item => item.family === 'native-auth-byok').fingerprint,
     '6709d34d2239b74ad4f3796d224d8325d4e89225508d61de3976b19a4ce53f90');
   new vm.Script(patchClaudeNativeApiAuth(legacy).source);
+  assert.equal(patched830.evidence.length, 11);
+  assert.equal(patched830.evidence.find(item => item.family === 'native-auth-byok').fingerprint,
+    'f917061470703c1c16d0a945ed82dc41211c44b5cadeefee42f44325851d97e9');
+  assert.equal(patched830.metadata.trafficDefaults.name, 'nativeTrafficDefaults');
+});
+
+test('830 retains its native traffic default while repairing sealed API-key authentication', async () => {
+  const input = inputs();
+  const before = await run(fixture830, input), after = await run(patched830.source, input);
+  assert.equal(before.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, '1');
+  assert.equal(after.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, '1');
+  assert.equal(after.env.ANTHROPIC_API_KEY, input.credential.value);
+  assert.equal(after.env.ANTHROPIC_AUTH_TOKEN, '');
+  assert.deepEqual(JSON.parse(after.argvAppend[1]).env, after.env);
+  const bridge = inputs({ provider: { native: false } });
+  assert.equal((await run(patched830.source, bridge)).env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, '1');
+  assert.deepEqual(await run(patched830.source, bridge), await run(fixture830, bridge));
+  const official = inputs({ provider: { baseURL: 'https://api.anthropic.com' } });
+  assert.equal((await run(fixture830, official)).env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, undefined);
+  assert.equal((await run(patched830.source, official)).env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, undefined);
 });
 
 test('native sealed Anthropic BYOK reuses the existing credential as API key in env and settings', async () => {
@@ -96,6 +122,7 @@ for (const [label, changes] of unchanged) {
   test(`${label} retains its exact original behavior`, async () => {
     const input = inputs(changes);
     assert.deepEqual(await run(patched.source, input), await run(fixture, input));
+    assert.deepEqual(await run(patched830.source, input), await run(fixture830, input));
   });
 }
 
@@ -145,4 +172,21 @@ test('changed or ambiguous auth/transport structures fail closed', () => {
   }
   assert.throws(() => patchClaudeNativeApiAuth(patched.source), /already patched/);
   assert.equal(patched.source.split(NATIVE_AUTH_MARKER).length, 2);
+});
+
+test('830 changed, rebound or ambiguous native traffic defaults fail closed', () => {
+  const definition = 'nativeTrafficDefaults={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":"1"}';
+  const variants = [
+    fixture830.replace(definition, 'nativeTrafficDefaults={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":"0"}'),
+    fixture830.replace(definition, 'nativeTrafficDefaults={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":"1","ANTHROPIC_API_KEY":"changed"}'),
+    fixture830 + '\n' + definition + ';',
+    fixture830.replace(',yes,Aes,nativeTrafficDefaults)', ',yes,Aes,otherTrafficDefaults)')
+      + '\notherTrafficDefaults={"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":"1"};',
+    fixture830.replace('...yes,...Aes,...nativeTrafficDefaults', '...yes,...Aes'),
+  ];
+  for (const changed of variants) {
+    assert.notEqual(changed, fixture830);
+    assert.throws(() => patchClaudeNativeApiAuth(changed), error =>
+      ['claude-controls-structure-mismatch', 'claude-controls-unverified-structure'].includes(error.code));
+  }
 });
