@@ -11,11 +11,15 @@ const TRUSTED = {
     'ae2e02ce0b398c01f052551d70ea353c4c6c0d856b2a9377763cbbcdc6518d20',
     // 787 forwards an optional credit value to the native route badge.
     '438a769e3a73c362221abc0462c2c9d49c644eaacf00eafe1a8a5d8eca371214',
+    // 840 measures route density in the DOM and adds a separate native right slot.
+    '598f87852f075af623e57b4acdc7d50dfe405a059d21efffd760a8977d4520be',
   ],
   select: [
     '56dcded26668cd0f3c848dd939c4eb4fac036435781fa340b42037976c27ff57',
     // 824 waits until menu geometry exists before scrolling the active row.
     '6f05ab0aa4590f951dbbaed6568b17d9bd0b97c12357da2ecfa201abe792473d',
+    // 840 closes hidden anchors, uses captured pointer events and refines group headings.
+    '8abef7bf34f095c2388dde363ae5b291385e7d5827ba2da3a3825fa7fe974ffb',
   ],
   request: [
     '66d0ec3ae961168f24ef7d347baeb33c80007301593b096cbb099b23d72e4383',
@@ -154,13 +158,21 @@ function detectFrontendAssets(assets) {
   const symbols = { REACT: ui.react, JSX: ui.jsx, STORE: linked(catalog.groups.store), CONTEXT: linked(context.groups.hook), REQUEST: linked(request.groups.request), SELECT: linked(select.groups.select) };
   const contextProvider = linked(provider.groups.provider);
 
-  const route = only(input, regex(String.raw`function (?<route>@ID)\(\{agent:(?<agent>@ID),agentLabel:@ID,model:(?<model>@ID),modelTitle:@ID,routeLeg:@ID,routeWord:@ID,routeProvider:@ID=!1,subscription:@ID=!1,(?:credit:@ID=null,)?workspace:(?<workspace>@ID),checkout:@ID,efforts:@ID,effort:@ID,onEffort:@ID,stripAnchorRef:@ID,open:@ID,onOpen:@ID,disabled:(?<disabled>@ID),tail:(?<tail>@ID),t:@ID\}\)`), 'Split compact route');
+  const route = only(input, regex(String.raw`function (?<route>@ID)\(\{agent:(?<agent>@ID),agentLabel:@ID,model:(?<model>@ID),modelTitle:@ID,routeLeg:@ID,routeWord:@ID,routeProvider:@ID=!1,(?:subscription:@ID=!1,)?(?:credit:@ID=null,)?workspace:(?<workspace>@ID),checkout:@ID,efforts:@ID,effort:@ID,onEffort:(?<onEffort>@ID),stripAnchorRef:@ID,open:@ID,onOpen:@ID,disabled:(?<disabled>@ID),tail:(?<tail>@ID),(?:right:(?<right>@ID),rightKey:@ID,)?t:@ID\}\)`), 'Split compact route');
   const routeBody = trusted(input, route.groups.route, 'route', inputPath, evidence);
-  const compact = only(routeBody, regex(String.raw`children:\[@ID,@ID\]\}\)\),${escape(route.groups.tail)},${escape(route.groups.workspace)}&&`), 'Split compact insertion');
-  const budget = only(routeBody, regex(String.raw`(?<function>@ID)\(\{model:${escape(route.groups.model)},effort:@ID,budget:${escape(route.groups.tail)}\?(?<base>@ID)-(?<cost>@ID):\k<base>\}\)`), 'Split compact budget');
+  const measuredRoute = route.groups.right !== undefined;
+  const compact = only(routeBody, regex(String.raw`children:\[@ID,@ID\]\}\)\),${escape(route.groups.tail)},${escape(measuredRoute ? route.groups.right : route.groups.workspace)}&&`), 'Split compact insertion');
+  const budget = measuredRoute ? null : only(routeBody, regex(String.raw`(?<function>@ID)\(\{model:${escape(route.groups.model)},effort:@ID,budget:${escape(route.groups.tail)}\?(?<base>@ID)-(?<cost>@ID):\k<base>\}\)`), 'Split compact budget');
+  // Keep Claude's second row outside the 840 measured route. Wrapping its flex
+  // children would change the native max-content density measurement.
+  const claudeRow = measuredRoute ? only(routeBody, regex(String.raw`\}\)\]\}\),(?<available>@ID)&&${escape(route.groups.onEffort)}&&${escape(ui.jsx)}\.jsx\(@ID,\{open:`), 'Measured route second-row insertion') : null;
+  const routeMeasure = measuredRoute ? only(routeBody, regex(String.raw`${escape(ui.react)}\.useLayoutEffect\(\(\)=>\{const (?<node>@ID)=(?<ref>@ID)\.current;\k<node>&&(?<measure>@ID)\(\k<node>\)\},\[`), 'Native measured route refresh') : null;
+  const measureProp = routeMeasure ? `,measureRoute:()=>{const mirasimRouteNode=${routeMeasure.groups.ref}.current;if(mirasimRouteNode)${routeMeasure.groups.measure}(mirasimRouteNode)}` : '';
   const invocation = only(input, regex(String.raw`(?<sheet>@ID)&&${escape(ui.jsx)}\.jsx\(${escape(route.groups.route)},\{agent:(?<agent>@ID),agentLabel:[\s\S]{1,1800}?efforts:(?<efforts>@ID),effort:(?<effort>@ID),onEffort:(?<onEffort>@ID),[\s\S]{1,1800}?disabled:!(?<agents>@ID)\.length,`), 'Split compact invocation');
   const parent = invocation.groups;
-  const layout = only(input, regex(String.raw`(?<layout>@ID)=(?<hook>@ID)\(\),${escape(parent.sheet)}=\k<layout>==="sheet"`), 'Split layout guard');
+  const layout = only(input, regex(measuredRoute
+    ? String.raw`${escape(parent.sheet)}=(?<hook>@ID)\(\)==="sheet"`
+    : String.raw`(?<layout>@ID)=(?<hook>@ID)\(\),${escape(parent.sheet)}=\k<layout>==="sheet"`), 'Split layout guard');
   const desktop = only(input, regex(String.raw`${escape(ui.jsx)}\.jsx\((?<effortControl>@ID),\{current:${escape(parent.effort)},options:${escape(parent.efforts)},onSelect:${escape(parent.onEffort)},label:(?<translate>@ID)\("hub.selectEffort"\),(?:t:\k<translate>|t)\}\)`), 'Split desktop effort');
   const effortBody = trusted(input, desktop.groups.effortControl, 'effort', inputPath, evidence);
   if (!effortBody.includes(`${layout.groups.hook}()==="sheet"`)) fail('split-structure-mismatch', 'Desktop and compact layouts do not share their guard');
@@ -172,20 +184,23 @@ function detectFrontendAssets(assets) {
   if (![invocation.index, desktop.index].every(at => at > argsEnd && at < end)) fail('split-structure-mismatch', 'Both layouts must belong to the same input composer');
   if (/serviceTier|service_tier|speedTier|fastMode|ultracodeEnabled|data-mirasim-/.test(routeBody + input.slice(argsEnd, end))) fail('native-speed-control', 'The split input composer already handles speed controls');
   const metadata = {
-    inputPath, catalogPath, symbols, routeFunction: route.groups.route,
+    inputPath, catalogPath, symbols, routeFunction: route.groups.route, routeMode: measuredRoute ? 'measured' : 'budgeted',
+    routeMeasureFunction: routeMeasure?.groups.measure || null, routeRef: routeMeasure?.groups.ref || null,
     catalogMode: deduplicatedCatalog.length ? 'deduplicated' : 'legacy',
     catalogEqualityFunction: catalog.groups.equal || null,
     catalogFrame: catalog.groups.frame, catalogStore: catalog.groups.store,
     contextProvider, contextProviderImported: contextProvider, contextVariable: null,
     contextOwner: { path: catalogPath, context: context.groups.context, provider: provider.groups.provider },
     routeAnchor: compact[0],
-    routeReplacement: compact[0].replace(`,${route.groups.tail},`, `,/* mirasim-speed-picker:compact */${ui.jsx}.jsx(MirasimSpeedPickerV1,{agent:${route.groups.agent},disabled:${route.groups.disabled},compact:true}),${route.groups.tail},`),
+    routeReplacement: compact[0].replace(`,${route.groups.tail},`, () => `,/* mirasim-speed-picker:compact */${measuredRoute ? `${route.groups.agent}==="codex"&&` : ''}${ui.jsx}.jsx(MirasimSpeedPickerV1,{agent:${route.groups.agent},disabled:${route.groups.disabled},compact:true${measureProp}}),${route.groups.tail},`),
+    claudeRowAnchor: claudeRow?.[0] || null,
+    claudeRowReplacement: claudeRow ? claudeRow[0].replace(`,${claudeRow.groups.available}&&`, () => `,/* mirasim-speed-picker:measured-claude-row */${route.groups.agent}==="claude"&&${ui.jsx}.jsx(MirasimSpeedPickerV1,{agent:${route.groups.agent},disabled:${route.groups.disabled},compact:true,separateRow:true}),${claudeRow.groups.available}&&`) : null,
     desktopAnchor: desktop[0],
     desktopReplacement: `${desktop[0]},/* mirasim-speed-picker:desktop */!${parent.sheet}&&${ui.jsx}.jsx(MirasimSpeedPickerV1,{agent:${parent.agent},disabled:!${parent.agents}.length})`,
     catalogAnchor: catalog[0],
     catalogReplacement: catalog[0].replace(`models:${catalog.groups.frame}.models,`, `/* mirasim-speed-picker:catalog */fastMode:${catalog.groups.frame}.fastMode,ultracodeEnabled:${catalog.groups.frame}.ultracodeEnabled,serviceTier:${catalog.groups.frame}.serviceTier,serviceTiers:${catalog.groups.frame}.serviceTiers,models:${catalog.groups.frame}.models,`),
-    budgetAnchor: budget[0],
-    budgetReplacement: budget[0].replace(`budget:${route.groups.tail}?${budget.groups.base}-${budget.groups.cost}:${budget.groups.base}`, `budget:Math.max(8,(${route.groups.tail}?${budget.groups.base}-${budget.groups.cost}:${budget.groups.base})-(${route.groups.agent}==="codex"?9:0))`),
+    budgetAnchor: budget?.[0] || null,
+    budgetReplacement: budget ? budget[0].replace(`budget:${route.groups.tail}?${budget.groups.base}-${budget.groups.cost}:${budget.groups.base}`, `budget:Math.max(8,(${route.groups.tail}?${budget.groups.base}-${budget.groups.cost}:${budget.groups.base})-(${route.groups.agent}==="codex"?9:0))`) : null,
     compactAgent: route.groups.agent,
     controlFunction: 'MirasimSpeedPickerV1', speedFunction: 'MirasimCodexSpeedPickerV3', ultracodeFunction: 'MirasimUltracodeToggleV1', fastFunction: 'MirasimClaudeFastToggleV4', queueFunction: 'MirasimClaudeSettingsRequestV4', claudeControlsFunction: 'MirasimClaudeControlsV4',
   };
@@ -206,22 +221,33 @@ function patchFrontendAssets(assets, options = {}) {
   }
   let speed = resolvedTemplate(options.speedTemplate ?? readTemplate('speed-picker.template.js'), m.symbols);
   speed = replaceOnce(speed, 'function MirasimSpeedPickerV1(', 'function MirasimCodexSpeedPickerV3(', 'Name the preserved Codex component');
+  if (m.routeMode === 'measured') {
+    speed = replaceOnce(speed, 'function MirasimCodexSpeedPickerV3({ agent, disabled = false }) {',
+      'function MirasimCodexSpeedPickerV3({ agent, disabled = false, measureRoute }) {', 'Pass native route measurement');
+    speed = replaceOnce(speed, 'const value = pending ?? current;',
+      `const value = pending ?? current;\n  ${m.symbols.REACT}.useLayoutEffect(() => { if (typeof measureRoute === "function") measureRoute(); }, [value, locale, measureRoute]);`,
+      'Refresh native density when the speed label changes');
+  }
   let uc = unified.createUltracodeSource(m, options.ultracodeTemplate ?? readTemplate('ultracode-toggle.template.js'));
   uc = replaceOnce(uc, `await ${m.symbols.REQUEST}(client,`, 'await MirasimClaudeSettingsRequestV4(client,', 'Use serialized Claude settings writes');
   uc = replaceOnce(uc, '{ match: frame => frame.agent === "claude" });', '{ match: frame => frame.agent === "claude" && typeof frame.ultracodeEnabled === "boolean" && frame.ultracodeEnabled === next });', 'Validate the Ultracode acknowledgement');
   const fast = controls.createFastSource(m, options.fastTemplate ?? readTemplate('claude-fast-toggle.template.js'));
   const jsx = m.symbols.JSX;
-  const group = `/* mirasim-claude-controls:v4 */\nfunction MirasimClaudeControlsV4(props){return ${jsx}.jsxs("div",{"data-mirasim-claude-controls":"v4",style:{display:"flex",alignItems:"center",gap:2,flexShrink:0,...props.compact?{flexBasis:"100%",width:"100%",order:99}:{}},children:[${jsx}.jsx(MirasimUltracodeToggleV1,props),${jsx}.jsx(MirasimClaudeFastToggleV4,props)]})}\n`;
+  const compactStyle = m.routeMode === 'measured'
+    ? '...props.compact?props.separateRow?{width:"100%",marginTop:4}:{flexBasis:"100%",width:"100%",order:99}:{}'
+    : '...props.compact?{flexBasis:"100%",width:"100%",order:99}:{}';
+  const group = `/* mirasim-claude-controls:v4 */\nfunction MirasimClaudeControlsV4(props){return ${jsx}.jsxs("div",{"data-mirasim-claude-controls":"v4",style:{display:"flex",alignItems:"center",gap:2,flexShrink:0,${compactStyle}},children:[${jsx}.jsx(MirasimUltracodeToggleV1,props),${jsx}.jsx(MirasimClaudeFastToggleV4,props)]})}\n`;
   const wrapper = `/* mirasim-unified-controls:v3 */\nfunction MirasimSpeedPickerV1(props){return props.agent==="claude"?${jsx}.jsx(MirasimClaudeControlsV4,props):props.agent==="codex"?${jsx}.jsx(MirasimCodexSpeedPickerV3,props):null}\n`;
   let input = assets.get(m.inputPath);
   for (const [before, after, label] of [
     [m.routeAnchor, m.routeReplacement, 'Split compact control insertion'],
+    [m.claudeRowAnchor, m.claudeRowReplacement, 'Measured compact Claude second row'],
     [m.desktopAnchor, m.desktopReplacement, 'Split desktop control insertion'],
     [m.budgetAnchor, m.budgetReplacement, 'Split compact Codex budget'],
     [`function ${m.routeFunction}(`, `${speed}\n${uc}\n${fast}\n${group}${wrapper}function ${m.routeFunction}(`, 'Add controls using verified imported helpers'],
-  ]) input = replaceOnce(input, before, after, label);
+  ].filter(([before]) => before !== null)) input = replaceOnce(input, before, after, label);
   const routeBefore = compat.extractFunction(input, m.routeFunction);
-  const routeAfter = replaceOnce(routeBefore, 'className:"flex w-full items-stretch overflow-hidden text-fg-3",children:[', `className:"flex w-full items-stretch overflow-hidden text-fg-3",style:${m.compactAgent}==="claude"?{flexWrap:"wrap",rowGap:4}:void 0,children:[`, 'Split compact second control row');
+  const routeAfter = m.routeMode === 'measured' ? routeBefore : replaceOnce(routeBefore, 'className:"flex w-full items-stretch overflow-hidden text-fg-3",children:[', `className:"flex w-full items-stretch overflow-hidden text-fg-3",style:${m.compactAgent}==="claude"?{flexWrap:"wrap",rowGap:4}:void 0,children:[`, 'Split compact second control row');
   input = replaceOnce(input, routeBefore, routeAfter, 'Keep split compact Claude rows separate');
   const owner = replaceOnce(assets.get(m.catalogPath), m.catalogAnchor, m.catalogReplacement, 'Preserve all control fields in shared catalog owner');
   return { mode: 'split', paths: detected.paths, files: new Map([[m.inputPath, input], [m.catalogPath, owner]]), metadata: m, evidence: detected.evidence, changes: ['Patch verified split input module using existing named imports', 'Retain control fields in the separate catalog module', 'Preserve independent Fast/Ultracode controls and Codex speed behavior'] };
