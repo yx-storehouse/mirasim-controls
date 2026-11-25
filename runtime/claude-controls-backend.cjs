@@ -26,13 +26,22 @@ const FAST_RESPONSIBILITIES = {
 // patched. 750--792 share the first BYOK adapter; 824--828 add inline-tool defaults.
 // 830 additionally supplies the native nonessential-traffic default. Its binding
 // and literal value are checked separately below; this patch preserves that flag.
+// 842 clears the inherited 1M-context disable flag for resolved contexts >200k on
+// bridges/non-official endpoints. Preserve and verify its helper and shared resolver.
 // The sealed credential, raw proxy and header-replacement contracts are identical
 // across those reviewed builds. Never change generic OAuth or proxy auth globally.
 const NATIVE_TRAFFIC_BYOK = 'f917061470703c1c16d0a945ed82dc41211c44b5cadeefee42f44325851d97e9';
 const NATIVE_TRAFFIC_DEFAULTS = '0a2caaa8e7bf96ca46842b1a5e541bbaf252694ba544f207ceb34d73f8fd2a8d';
+const NATIVE_LARGE_CONTEXT_BYOK = 'de08a550b7ec947700f6fe578e7c10ea7fdda8302a8a17ad36941d5c90b64ea2';
+const TRUSTED_LARGE_CONTEXT = {
+  helper: 'f79f0cf1365fcdf82d2d9ea0b68129d372848c01e7f9feacb69697b19561708d',
+  maximum: 'd1bcf8131c27983f003440d23ff72c16d7556beaf60e4b4f767b196d26ce2830',
+  resolver: 'ada4cdb987dd6aa0dfbce02a6cb0ce3910c5a22f04ad63a4eea1896652e6db23',
+  threshold: '3dd44c726e4f41198d1baccd2fe5138775e6d226ad6216a5f0ac0fbc735cec14',
+};
 const TRUSTED_NATIVE_AUTH = {
   byok: ['6709d34d2239b74ad4f3796d224d8325d4e89225508d61de3976b19a4ce53f90',
-    '5ce097d912732d97dba70796d09bca525420b4e8d3f35e9be775c5df686e70d3', NATIVE_TRAFFIC_BYOK],
+    '5ce097d912732d97dba70796d09bca525420b4e8d3f35e9be775c5df686e70d3', NATIVE_TRAFFIC_BYOK, NATIVE_LARGE_CONTEXT_BYOK],
   credentials: ['269811bd1ccfc6ed7d9187ac62b94555f93d71b51247be6aac3b5726773176f0'],
   auth: ['1ae60d8f22d8204108bb80cf76c74481ea93b2c348507b30f487dafbae176d6e'],
   sealed: ['9606fa937f692bb3f509df37f58963b5118436943234a73fa4d98bf686f1899f'],
@@ -61,6 +70,29 @@ function replaceOnce(source, before, after, label) {
   const index = source.indexOf(before);
   if (index < 0 || source.indexOf(before, index + before.length) >= 0) fail('claude-controls-structure-mismatch', `${label}: missing or ambiguous anchor`);
   return source.slice(0, index) + after + source.slice(index + before.length);
+}
+
+function detectNativeLargeContext(source, { byok, credentials, auth }, helperName) {
+  const item = name => ({ name, body: extractFunction(source, name) });
+  const helper = item(helperName), c = escape(byok.credential), p = escape(byok.provider);
+  const feature = only(helper.body, regex(String.raw`function @ID\((?<profile>@ID)\)\{let (?<value>@ID)=(?<resolver>@ID)\(\k<profile>\);return \k<value>&&\k<value>>(?<threshold>@ID)\?`), 'Native Claude large-context helper').groups;
+  const maximumName = only(byok.body, regex(String.raw`\.\.\.${escape(credentials.name)}\(${c}\["value"\],${escape(auth.name)}\(${p}\)\),\.\.\.(?<maximum>@ID)\(${escape(byok.profile)}\),`), 'Native Claude context-limit helper').groups.maximum;
+  const maximum = item(maximumName);
+  const maximumResolver = only(maximum.body, regex(String.raw`function @ID\((?<profile>@ID)\)\{let @ID=(?<resolver>@ID)\(\k<profile>\);`), 'Native Claude context-limit resolver').groups.resolver;
+  if (maximumResolver !== feature.resolver) fail('claude-controls-structure-mismatch', 'Native Claude context helpers must use the same resolver');
+  const resolver = item(feature.resolver);
+  const threshold = { name: feature.threshold, body: only(source,
+    new RegExp(`(?<![$\\w])${escape(feature.threshold)}=\\d+(?:e[+-]?\\d+)?(?=[,;])`, 'g'), 'Native Claude large-context threshold')[0] };
+  const metadata = { helper, maximum, resolver, threshold }, evidence = [];
+  for (const [family, expected] of Object.entries(TRUSTED_LARGE_CONTEXT)) {
+    const entry = metadata[family], actual = structuralFingerprint(entry.body);
+    if (actual !== expected) fail('claude-controls-unverified-structure', `Native Claude large-context ${family} changed; manual adaptation is required`, {
+      family: `native-auth-largeContext-${family}`, responsibility: 'Native Claude resolved-context limit and 1M-context default',
+      function: entry.name, expectedFingerprints: [expected], actualFingerprint: actual, fingerprint: actual,
+    });
+    evidence.push({ family: `native-auth-largeContext-${family}`, function: entry.name, fingerprint: actual });
+  }
+  return { metadata, evidence };
 }
 
 function detectClaudeNativeApiAuth(source) {
@@ -96,8 +128,12 @@ function detectClaudeNativeApiAuth(source) {
       function: entry.name, expectedFingerprints: expected, actualFingerprint: fingerprint, fingerprint,
     });
   }
-  if (structuralFingerprint(byok.normalized) === NATIVE_TRAFFIC_BYOK) {
-    const defaultsName = only(byok.body, regex(String.raw`Object\["assign"\]\(${escape(native.groups.env)},@ID\(${escape(byok.profile)}\["modelId"\]\),@ID,@ID,(?<defaults>@ID)\)`), 'Native Claude traffic-default binding').groups.defaults;
+  const byokFingerprint = structuralFingerprint(byok.normalized);
+  if ([NATIVE_TRAFFIC_BYOK, NATIVE_LARGE_CONTEXT_BYOK].includes(byokFingerprint)) {
+    const contextCall = byokFingerprint === NATIVE_LARGE_CONTEXT_BYOK
+      ? String.raw`(?<largeContext>@ID)\(${escape(byok.profile)}\),` : '';
+    const defaultsCall = only(byok.body, regex(String.raw`Object\["assign"\]\(${escape(native.groups.env)},${contextCall}@ID\(${escape(byok.profile)}\["modelId"\]\),@ID,@ID,(?<defaults>@ID)\)`), 'Native Claude traffic-default binding').groups;
+    const defaultsName = defaultsCall.defaults;
     const defaults = { name: defaultsName, body: only(source,
       new RegExp(`(?<![$\\w])${escape(defaultsName)}=\\{[^{}]*\\}`, 'g'), 'Native Claude traffic-default constant')[0] };
     const fingerprint = structuralFingerprint(defaults.body);
@@ -107,6 +143,11 @@ function detectClaudeNativeApiAuth(source) {
     });
     metadata.trafficDefaults = defaults;
     evidence.push({ family: 'native-auth-trafficDefaults', function: defaultsName, fingerprint });
+    if (defaultsCall.largeContext) {
+      const context = detectNativeLargeContext(source, { byok, credentials, auth }, defaultsCall.largeContext);
+      metadata.largeContext = context.metadata;
+      evidence.push(...context.evidence);
+    }
   }
   return { compatible: true, metadata, evidence };
 }

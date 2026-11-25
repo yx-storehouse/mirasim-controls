@@ -52,7 +52,9 @@
 - **Claude Fast**：明确开启或关闭 Fast；未显式选择前保持原生设置继承。
 - **Claude Ultracode**：独立启用原生 Ultracode 编排行为，同时保留所选推理强度；关闭开关不强制抹除其他原生来源的模式设置。
 
-补丁引擎 **4.5.3** 支持 Mirasim **0.0.824 / ABI 227、0.0.827 / ABI 231、0.0.828 / ABI 233、0.0.830 / ABI 234、0.0.840 / ABI 243**，保留此前的Claude Fast认证修复和原生中转默认设置适配。0.0.840重写了紧凑输入栏布局及菜单行为，需要使用4.5.3；4.5.2会在写入前拒绝这个新前端结构。详见 [0.0.840适配说明](docs/compatibility-0.0.840.md)、[0.0.830适配说明](docs/compatibility-0.0.830.md)、[0.0.828安装包验证](docs/compatibility-0.0.828.md)、[Fast修复说明](docs/claude-fast-auth-4.5.1.md)、[0.0.824适配说明](docs/compatibility-0.0.824.md) 和 [0.0.827安装包验证](docs/compatibility-0.0.827.md)。固定 BAT 和更新方式保持不变。
+**Mirasim 0.0.842（ABI 245）使用补丁 4.5.4。** 该版本适配 Claude 自定义 API 连接新增的长上下文处理，并沿用 0.0.840 的紧凑输入栏。完成 Mirasim 更新后，从托盘退出并双击原来的 `01-安装或修复.bat`。[0.0.842 适配说明](docs/compatibility-0.0.842.md)
+
+此前已适配的版本包括 0.0.824（ABI 227）、0.0.827（ABI 231）、0.0.828（ABI 233）、0.0.830（ABI 234）和 0.0.840（ABI 243）。[0.0.840 输入栏](docs/compatibility-0.0.840.md) · [0.0.830 中转设置](docs/compatibility-0.0.830.md) · [0.0.828 安装包](docs/compatibility-0.0.828.md) · [Claude Fast 认证修复](docs/claude-fast-auth-4.5.1.md) · [0.0.824](docs/compatibility-0.0.824.md) · [0.0.827](docs/compatibility-0.0.827.md)
 
 4.5.0发布时，旧版 `0.0.750、0.0.761、0.0.771、0.0.774、0.0.785、0.0.787、0.0.792` 的后端和前端候选输出已回归确认，与4.4.0逐字节一致；这是4.5.0的历史验证结论，相关说明见 [0.0.792安装包验证](docs/compatibility-0.0.792.md)。脚本自动更新不代表自动猜测任意新版结构；没有已验证适配的新Mirasim版本，仍会导出兼容报告并停止写入。
 

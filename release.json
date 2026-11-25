@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "4.5.3",
+  "version": "4.5.4",
   "files": [
     {
       "path": "runtime/asar.cjs",
@@ -8,15 +8,15 @@
     },
     {
       "path": "runtime/bundled-manager.cjs",
-      "sha256": "718b1fc7551f57843b10ff8de77b82e524cbc1c4d1a23f740d1f5388724ce739"
+      "sha256": "7ae28f6804e5ddafa7b61f45dc303c42c91569c8976c00fc8ee4c23fba00b56f"
     },
     {
       "path": "runtime/cache-manager.cjs",
-      "sha256": "4d368b06eb8f28f9125317b655c5a5036cee328a3d92a3344290f49ee2518720"
+      "sha256": "c0ad48efaa369865fe15ea7968d2d9c220c3fb6f320c4308f5cd4ce79b9aec2a"
     },
     {
       "path": "runtime/claude-controls-backend.cjs",
-      "sha256": "2a85de93f791ae788a7c2a7327c87af4c65806ea120c67d9a89c614aa8c59a9e"
+      "sha256": "257cc9a1607155a0e548f702885cd173f2c56cf0ff0e70dbd02c3d68ab78bf3a"
     },
     {
       "path": "runtime/claude-controls-frontend.cjs",
@@ -48,7 +48,7 @@
     },
     {
       "path": "runtime/manager.cjs",
-      "sha256": "f07653a7990577a2e2d54182dd4db17185538b88662d98aeb865fe5ab7708fee"
+      "sha256": "208d57819dd2dd9e425b8e01732bfc5892e473ef53950cc7a8235bbdda589cfb"
     },
     {
       "path": "runtime/run.ps1",
